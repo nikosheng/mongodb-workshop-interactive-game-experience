@@ -8,6 +8,7 @@ import { runQuestionBankGeneration } from '../workflows/questionBankWorkflow.js'
 import { suggestQualityRule } from '../lib/qualityRules.js';
 import { GLOBAL_BANK_POLICY, readQualityMemory, updateQualityMemory } from '../lib/qualityMemory.js';
 import { validateEditedChallenge } from '../lib/llm.js';
+import { resetCurrentRound } from '../lib/rounds.js';
 
 interface QuestionBankDocument {
   name: string;
@@ -74,6 +75,26 @@ router.get('/quality-rules', async (_req, res) => {
 
 router.get('/quality-rules/memory', async (_req, res) => {
   res.json({ memory: await readQualityMemory() });
+});
+
+router.post('/admin/reset-round', async (_req, res) => {
+  const round = await resetCurrentRound();
+  res.json({ ok: true, roundId: round.roundId, startedAt: round.startedAt.toISOString() });
+});
+
+router.get('/admin/leaderboard', async (req, res) => {
+  const mode = req.query['mode'] as string | undefined;
+  const match = mode === 'solo' || mode === 'multiplayer' ? { mode } : {};
+  const entries = await getDb().collection('leaderboardEntries').aggregate([
+    { $match: match },
+    { $sort: { totalScore: -1, completionMs: 1, hintsUsed: 1, completedAt: 1 } },
+    { $group: { _id: '$playerId', best: { $first: '$$ROOT' } } },
+    { $replaceRoot: { newRoot: '$best' } },
+    { $sort: { totalScore: -1, completionMs: 1, hintsUsed: 1 } },
+    { $limit: 100 },
+    { $project: { _id: 0, playerId: 0 } },
+  ]).toArray();
+  res.json({ entries });
 });
 
 router.get('/:id', async (req, res) => {

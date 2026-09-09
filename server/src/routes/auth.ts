@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db/client.js';
+import { getCurrentRound } from '../lib/rounds.js';
 
 const router = Router();
 
@@ -23,6 +24,7 @@ router.post('/login', async (req: Request, res: Response) => {
   const name = parsed.data.name.trim();
   const sessionToken = uuidv4();
   const db = getDb();
+  const round = await getCurrentRound();
 
   const result = await db.collection('players').insertOne({
     name,
@@ -33,6 +35,7 @@ router.post('/login', async (req: Request, res: Response) => {
   req.session.playerId = result.insertedId.toString();
   req.session.playerName = name;
   req.session.sessionToken = sessionToken;
+  req.session.roundId = round.roundId;
 
   res.json({ playerId: result.insertedId.toString(), name });
 });

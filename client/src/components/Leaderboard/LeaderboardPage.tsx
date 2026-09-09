@@ -6,9 +6,6 @@ interface LeaderboardEntry {
   playerName: string;
   totalScore: number;
   completionMs: number;
-  hintsUsed: number;
-  correctCount: number;
-  totalChallenges: number;
   mode: string;
   completedAt: string;
 }
@@ -78,8 +75,6 @@ export function LeaderboardPage({ roomCode, onBack }: Props) {
                   <span>玩家</span>
                   <span className={styles.numCol}>分數</span>
                   <span className={styles.numCol}>完成時間</span>
-                  <span className={styles.numCol}>提示</span>
-                  <span className={styles.numCol}>正確率</span>
                 </div>
                 {entries.map((e, i) => (
                   <div key={i} className={`${styles.tableRow} ${i === 0 ? styles.first : ''}`}>
@@ -89,12 +84,6 @@ export function LeaderboardPage({ roomCode, onBack }: Props) {
                     <span className={styles.playerName}>{e.playerName}</span>
                     <span className={`${styles.numCol} ${styles.score}`}>{e.totalScore}</span>
                     <span className={styles.numCol}>{formatTime(e.completionMs)}</span>
-                    <span className={styles.numCol}>{e.hintsUsed}</span>
-                    <span className={styles.numCol}>
-                      {e.totalChallenges > 0
-                        ? `${Math.round(e.correctCount / e.totalChallenges * 100)}%`
-                        : '—'}
-                    </span>
                   </div>
                 ))}
               </div>

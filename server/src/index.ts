@@ -6,6 +6,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { connectDb } from './db/client.js';
+import { getCurrentRound } from './lib/rounds.js';
 import { createIndexes } from './db/indexes.js';
 import { sessionMiddleware } from './middleware/session.js';
 import authRouter from './routes/auth.js';
@@ -95,6 +96,7 @@ async function start() {
   try {
     const db = await connectDb();
     await createIndexes(db);
+    await getCurrentRound();
     try {
       await ensureQualityMemory();
       console.log('Mastra global quality memory initialized');

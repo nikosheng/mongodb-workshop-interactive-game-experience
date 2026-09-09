@@ -72,7 +72,7 @@
 
 .tableHead, .tableRow {
   display: grid;
-  grid-template-columns: 50px 1fr 80px 100px 60px 80px;
+  grid-template-columns: 50px 1fr 80px 100px;
   gap: 16px;
   padding: 12px 20px;
   align-items: center;
@@ -122,9 +122,5 @@
 @media (max-width: 600px) {
   .tableHead, .tableRow {
     grid-template-columns: 40px 1fr 70px 80px;
-  }
-  .tableHead :nth-child(4), .tableHead :nth-child(6),
-  .tableRow :nth-child(4), .tableRow :nth-child(6) {
-    display: none;
   }
 }

@@ -6,6 +6,9 @@ export async function createIndexes(db: Db): Promise<void> {
     { key: { sessionToken: 1 }, unique: true },
     { key: { name: 1 } },
   ]);
+  await db.collection('gameRounds').createIndexes([
+    { key: { roundId: 1 }, unique: true },
+  ]);
 
   // rooms
   await db.collection('rooms').createIndexes([

@@ -142,10 +142,15 @@ export function registerRoomHandlers(io: Server, socket: AppSocket): void {
         isCorrect: boolean;
         serverScore: number;
         hintsUsed: number;
+        challengeId: string;
       }>('attempts').find({ sessionId: data.sessionId, playerId }).toArray();
 
       const totalScore = attempts.reduce((s, a) => s + (a.isCorrect ? a.serverScore : 0), 0);
-      const hintsUsed = attempts.reduce((s, a) => s + a.hintsUsed, 0);
+      const hintsByChallenge = new Map<string, number>();
+      for (const attempt of attempts) {
+        hintsByChallenge.set(attempt.challengeId, Math.max(hintsByChallenge.get(attempt.challengeId) ?? 0, attempt.hintsUsed));
+      }
+      const hintsUsed = [...hintsByChallenge.values()].reduce((s, count) => s + count, 0);
       const completedAt = new Date();
 
       // Update player record in room

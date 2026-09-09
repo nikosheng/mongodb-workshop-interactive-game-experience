@@ -32,22 +32,11 @@ type FeedbackState =
 // Initialize challenge start time outside component to avoid impure render
 const GAME_START_TIME = performance.now();
 
-export function GamePage({ user, mode, roomCode: _roomCode, onFinish, onBack }: Props) {
+export function GamePage({ user, mode, roomCode, onFinish, onBack }: Props) {
   const [challenges, setChallenges] = useState<Challenge[]>(defaultChallenges);
   const [loadingChallengeBank, setLoadingChallengeBank] = useState(true);
 
-  // Load saved progress synchronously as initial state
-  const savedProgress = (() => {
-    try {
-      const raw = localStorage.getItem('gameProgress');
-      if (!raw) return null;
-      return JSON.parse(raw) as { currentIndex: number; scores: Record<string, number> };
-    } catch { return null; }
-  })();
-
-  const [currentIndex, setCurrentIndex] = useState(
-    savedProgress ? Math.min(savedProgress.currentIndex, defaultChallenges.length - 1) : 0
-  );
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [assignments, setAssignments] = useState<SlotAssignmentMap>({});
   const [selectedPuzzle, setSelectedPuzzle] = useState<Puzzle | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
@@ -55,32 +44,23 @@ export function GamePage({ user, mode, roomCode: _roomCode, onFinish, onBack }: 
   const [hintCount, setHintCount] = useState(0);
   const [attemptCount, setAttemptCount] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [serverSyncError, setServerSyncError] = useState('');
   const [showHint, setShowHint] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [completedScores, setCompletedScores] = useState<Record<string, number>>(
-    savedProgress?.scores ?? {}
-  );
+  const [completedScores, setCompletedScores] = useState<Record<string, number>>({});
   const [submittingToLeaderboard, setSubmittingToLeaderboard] = useState(false);
   // Use a mutable ref container to avoid the impure Date.now() warning
   const challengeStartRef = useRef({ ts: GAME_START_TIME });
 
   const challenge = challenges[currentIndex]!;
 
-  // Save progress
   useEffect(() => {
-    localStorage.setItem('gameProgress', JSON.stringify({
-      currentIndex,
-      scores: completedScores,
-    }));
-  }, [currentIndex, completedScores]);
-
-  useEffect(() => {
-    if (mode === 'solo') {
-      apiPost<{ sessionId: string }>('/api/sessions', {})
+    if (mode === 'solo' || mode === 'multiplayer') {
+      apiPost<{ sessionId: string }>('/api/sessions', { mode, roomId: roomCode })
         .then(r => setSessionId(r.sessionId))
-        .catch(() => { /* offline mode */ });
+        .catch((error) => setServerSyncError(error instanceof Error ? error.message : '無法建立遊戲 session，請重新登入。'));
     }
-  }, [mode]);
+  }, [mode, roomCode]);
 
   useEffect(() => {
     apiGet<{ bank: QuestionBank | null }>('/api/question-banks/active')
@@ -125,6 +105,10 @@ export function GamePage({ user, mode, roomCode: _roomCode, onFinish, onBack }: 
   }, [selectedPuzzle, feedback]);
 
   const handleCheck = async () => {
+    if (mode === 'solo' && !sessionId) {
+      setFeedback({ type: 'incorrect', errors: [serverSyncError || '遊戲 session 尚未建立，請重新登入後再試。'], mql: mqlPreview });
+      return;
+    }
     const count = attemptCount + 1;
     setAttemptCount(count);
 
@@ -135,26 +119,42 @@ export function GamePage({ user, mode, roomCode: _roomCode, onFinish, onBack }: 
 
     const result = validateAnswer(challenge, slotAssignments);
     const currentHints = hintCount;
+    const slotIdMap: Record<string, string> = {};
+    Object.entries(assignments).forEach(([slotId, puzzle]) => {
+      slotIdMap[slotId] = puzzle.id;
+    });
+
+    const submitAttempt = sessionId
+      ? apiPost<{ isCorrect: boolean; serverScore: number }>('/api/sessions/attempt', {
+        sessionId,
+        challengeId: challenge.id,
+        slotAssignments: slotIdMap,
+        timeTakenMs: Math.max(0, Math.round(performance.now() - challengeStartRef.current.ts)),
+        attemptCount: count,
+        hintsUsed: currentHints,
+      })
+      : Promise.resolve(null);
 
     if (result.isCorrect) {
-      const score = Math.max(20, 100 - (count - 1) * 10 - currentHints * 15);
+      let score = Math.max(20, 100 - (count - 1) * 10 - currentHints * 15);
+      try {
+        const serverResult = await submitAttempt;
+        if (serverResult) {
+          if (!serverResult.isCorrect) {
+            setFeedback({ type: 'incorrect', errors: ['Server 驗證未通過，請重新檢查拼圖配對'], mql: mqlPreview });
+            return;
+          }
+          score = serverResult.serverScore;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '成績驗證失敗，請確認 server 連線後重試。';
+        setServerSyncError(message);
+        setFeedback({ type: 'incorrect', errors: [message], mql: mqlPreview });
+        return;
+      }
+      setServerSyncError('');
       setCompletedScores(prev => ({ ...prev, [challenge.id]: score }));
       setFeedback({ type: 'correct', score, mql: mqlPreview });
-
-      if (sessionId) {
-        const slotIdMap: Record<string, string> = {};
-        Object.entries(assignments).forEach(([slotId, puzzle]) => {
-          slotIdMap[slotId] = puzzle.id;
-        });
-        await apiPost('/api/sessions/attempt', {
-          sessionId,
-          challengeId: challenge.id,
-          slotAssignments: slotIdMap,
-          timeTakenMs: performance.now() - challengeStartRef.current.ts,
-          attemptCount: count,
-          hintsUsed: currentHints,
-        }).catch(() => { /* offline */ });
-      }
     } else {
       const errors = [
         ...result.slotErrors,
@@ -162,6 +162,12 @@ export function GamePage({ user, mode, roomCode: _roomCode, onFinish, onBack }: 
         ...result.semanticErrors,
       ];
       setFeedback({ type: 'incorrect', errors, mql: mqlPreview });
+      try {
+        await submitAttempt;
+        setServerSyncError('');
+      } catch (error) {
+        setServerSyncError(error instanceof Error ? error.message : '成績驗證失敗，請確認 server 連線後重試。');
+      }
     }
   };
 
@@ -180,6 +186,7 @@ export function GamePage({ user, mode, roomCode: _roomCode, onFinish, onBack }: 
   };
 
   const handleNext = () => {
+    if (serverSyncError) return;
     if (currentIndex < challenges.length - 1) {
       setCurrentIndex(prev => prev + 1);
       setAssignments({});
@@ -190,7 +197,7 @@ export function GamePage({ user, mode, roomCode: _roomCode, onFinish, onBack }: 
       setShowHint(false);
       challengeStartRef.current = { ts: performance.now() };
     } else {
-      if (sessionId && mode === 'solo') {
+      if (sessionId) {
         setSubmittingToLeaderboard(true);
       } else {
         onFinish();
@@ -199,7 +206,6 @@ export function GamePage({ user, mode, roomCode: _roomCode, onFinish, onBack }: 
   };
 
   const handleReset = () => {
-    localStorage.removeItem('gameProgress');
     setCurrentIndex(0);
     setAssignments({});
     setSelectedPuzzle(null);
@@ -214,8 +220,13 @@ export function GamePage({ user, mode, roomCode: _roomCode, onFinish, onBack }: 
 
   const handleSubmitLeaderboard = async (submit: boolean) => {
     if (sessionId) {
-      await apiPost('/api/sessions/complete', { sessionId, submitToLeaderboard: submit })
-        .catch(() => { /* offline */ });
+      try {
+        await apiPost('/api/sessions/complete', { sessionId, submitToLeaderboard: submit });
+      } catch (error) {
+        setServerSyncError(error instanceof Error ? error.message : '無法完成遊戲，請確認 server 連線後重試。');
+        setSubmittingToLeaderboard(false);
+        return;
+      }
     }
     setSubmittingToLeaderboard(false);
     onFinish();

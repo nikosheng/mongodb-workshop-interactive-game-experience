@@ -15,6 +15,7 @@
     "@mastra/memory": "^1.28.2",
     "@mastra/mongodb": "^1.18.5",
     "@query-quest/shared": "*",
+    "connect-mongo": "^6.0.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",

@@ -4,6 +4,8 @@ import { QuestionBankGenerator } from './QuestionBankGenerator';
 import { QuestionBankGallery } from './QuestionBankGallery';
 import { QuestionBankReview } from './QuestionBankReview';
 import { QualityRuleReview } from './QualityRuleReview';
+import { RoundResetControl } from './RoundResetControl';
+import { AdminLeaderboard } from './AdminLeaderboard';
 import styles from './AdminPage.module.css';
 
 interface Props {
@@ -41,6 +43,8 @@ export function AdminPage({ onBack }: Props) {
         <QuestionBankGallery secret={secret} refreshKey={refreshKey} onReview={setReviewBankId} />
         {reviewBankId && <QuestionBankReview secret={secret} bankId={reviewBankId} onChanged={() => setRefreshKey((key) => key + 1)} onClose={() => setReviewBankId(null)} />}
         <QualityRuleReview secret={secret} refreshKey={refreshKey} />
+        <RoundResetControl secret={secret} onReset={() => setRefreshKey((key) => key + 1)} />
+        <AdminLeaderboard secret={secret} refreshKey={refreshKey} />
       </main>
     </div>
   );

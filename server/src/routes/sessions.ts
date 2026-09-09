@@ -10,19 +10,31 @@ import type { Challenge, SlotAssignment } from '@query-quest/shared';
 const router = Router();
 
 // Create a solo game session
+const createSessionSchema = z.object({
+  mode: z.enum(['solo', 'multiplayer']).default('solo'),
+  roomId: z.string().optional(),
+});
+
 router.post('/sessions', requireAuth, async (req: Request, res: Response) => {
   const db = getDb();
+  const parsed = createSessionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: '遊戲 session 參數有誤' });
+    return;
+  }
   const playerId = req.session.playerId!;
-  const activeBank = await db.collection<{ _id: ObjectId }>('questionBanks').findOne(
+  const activeBank = await db.collection<{ _id: ObjectId; challenges: unknown[] }>('questionBanks').findOne(
     { isActive: true, status: 'ready' },
-    { projection: { _id: 1 } },
+    { projection: { _id: 1, challenges: 1 } },
   );
 
   const session = await db.collection('gameSessions').insertOne({
     playerId,
-    mode: 'solo',
+    mode: parsed.data.mode,
+    ...(parsed.data.roomId ? { roomId: parsed.data.roomId } : {}),
     challengeVersion: '1.0',
     challengeBankId: activeBank?._id.toString() ?? 'default',
+    totalChallenges: activeBank?.challenges.length ?? challenges.length,
     startedAt: new Date(),
     status: 'active',
   });
@@ -88,8 +100,10 @@ router.post('/sessions/attempt', requireAuth, async (req: Request, res: Response
   });
 
   const validationResult = validateAnswer(challenge, assignments);
+  const previousAttempts = await db.collection('attempts').countDocuments({ sessionId, challengeId });
+  const effectiveAttemptCount = previousAttempts + 1;
   const serverScore = validationResult.isCorrect
-    ? calculateScore(attemptCount, hintsUsed)
+    ? calculateScore(effectiveAttemptCount, hintsUsed)
     : 0;
 
   // Store attempt
@@ -99,7 +113,7 @@ router.post('/sessions/attempt', requireAuth, async (req: Request, res: Response
     challengeId,
     isCorrect: validationResult.isCorrect,
     timeTakenMs,
-    attemptCount,
+    attemptCount: effectiveAttemptCount,
     hintsUsed,
     serverScore,
     createdAt: new Date(),
@@ -136,9 +150,9 @@ router.post('/sessions/complete', requireAuth, async (req: Request, res: Respons
   const db = getDb();
 
   // Verify session
-  let sessionDoc: { _id: ObjectId; playerId: string; startedAt: Date } | null = null;
+  let sessionDoc: { _id: ObjectId; playerId: string; startedAt: Date; totalChallenges?: number; mode?: 'solo' | 'multiplayer'; roomId?: string } | null = null;
   try {
-    sessionDoc = await db.collection<{ _id: ObjectId; playerId: string; startedAt: Date }>('gameSessions').findOne({ _id: new ObjectId(sessionId) });
+    sessionDoc = await db.collection<{ _id: ObjectId; playerId: string; startedAt: Date; totalChallenges?: number; mode?: 'solo' | 'multiplayer'; roomId?: string }>('gameSessions').findOne({ _id: new ObjectId(sessionId) });
   } catch {
     res.status(400).json({ error: 'Invalid session ID' });
     return;
@@ -159,11 +173,18 @@ router.post('/sessions/complete', requireAuth, async (req: Request, res: Respons
     hintsUsed: number;
     challengeId: string;
   }>('attempts').find({ sessionId, playerId }).toArray();
+
+  if (attempts.length === 0 || !attempts.some((attempt) => attempt.isCorrect)) {
+    res.status(409).json({ error: '尚未有成功驗證的作答紀錄，無法提交排行榜' });
+    return;
+  }
   
   const totalScore = attempts.reduce((s, a) => s + (a.isCorrect ? a.serverScore : 0), 0);
-  const hintsUsed = attempts.reduce((s, a) => s + a.hintsUsed, 0);
-  const correctCount = attempts.filter(a => a.isCorrect).length;
-
+  const hintsByChallenge = new Map<string, number>();
+  for (const attempt of attempts) {
+    hintsByChallenge.set(attempt.challengeId, Math.max(hintsByChallenge.get(attempt.challengeId) ?? 0, attempt.hintsUsed));
+  }
+  const hintsUsed = [...hintsByChallenge.values()].reduce((sum, count) => sum + count, 0);
   await db.collection('gameSessions').updateOne(
     { _id: new ObjectId(sessionId) },
     { $set: { status: 'completed', completedAt } }
@@ -171,20 +192,20 @@ router.post('/sessions/complete', requireAuth, async (req: Request, res: Respons
 
   if (submitToLeaderboard) {
     await db.collection('leaderboardEntries').insertOne({
-      playerId,
-      playerName,
-      sessionId,
-      mode: 'solo',
+        playerId,
+        playerName,
+        sessionId,
+        mode: sessionDoc.mode ?? 'solo',
+        ...(sessionDoc.roomId ? { roomId: sessionDoc.roomId } : {}),
       totalScore,
       completionMs,
       hintsUsed,
-      correctCount,
-      totalChallenges: challenges.length,
+        totalChallenges: sessionDoc.totalChallenges ?? challenges.length,
       completedAt,
     });
   }
 
-  res.json({ totalScore, completionMs, hintsUsed, correctCount });
+  res.json({ totalScore, completionMs, hintsUsed });
 });
 
 export default router;
