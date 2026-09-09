@@ -1,0 +1,35 @@
+.panel { display: flex; flex-direction: column; gap: 18px; }
+.heading, .headingActions, .challengeHeader, .actions { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.heading p:not(.eyebrow), .challenge details p { color: var(--color-text-secondary); margin-top: 5px; line-height: 1.5; }
+.eyebrow { color: var(--color-primary); font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.list { display: flex; flex-direction: column; gap: 14px; }
+.challenge { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); }
+.approved { border-color: var(--color-success); background: #f0fdf4; }
+.challengeHeader h3 { margin-top: 4px; }
+.titleInput { width: min(100%, 560px); padding: 7px 9px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); font: inherit; font-weight: 600; }
+.id { color: var(--color-text-secondary); font-size: .72rem; margin-top: 4px; }
+.fullField { display: flex; flex-direction: column; gap: 5px; font-size: .82rem; font-weight: 600; }
+.fullField textarea, .puzzle input, .puzzle textarea { width: 100%; padding: 8px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-card); color: var(--color-text); font: inherit; }
+.puzzles { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.puzzle { display: grid; grid-template-columns: auto minmax(150px, 1fr) 130px auto; gap: 7px; align-items: center; padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.puzzle code { font-size: .72rem; color: var(--color-primary); }
+.puzzle textarea { grid-column: 2 / -1; font-family: var(--font-mono); font-size: .75rem; }
+.valueError { grid-column: 2 / -1; color: var(--color-error); font-size: .75rem; font-weight: 500; }
+.puzzle select { padding: 7px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-card); }
+.check { display: flex; gap: 4px; align-items: center; color: var(--color-text-secondary); font-size: .75rem; white-space: nowrap; }
+.number { color: var(--color-text-secondary); font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+.badge { padding: 4px 9px; border-radius: 999px; background: var(--color-warning-light); color: #92400e; font-size: .75rem; white-space: nowrap; }
+.approved .badge { background: var(--color-success-light); color: #065f46; }
+.answerGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.answerGrid label { display: flex; flex-direction: column; gap: 5px; font-size: .82rem; font-weight: 600; }
+.answerGrid select { width: 100%; padding: 9px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-card); color: var(--color-text); font: inherit; }
+.challenge details { font-size: .85rem; line-height: 1.5; }
+.challenge details summary { cursor: pointer; font-weight: 600; }
+.actions { justify-content: flex-end; }
+.message { padding: 10px 12px; border-radius: var(--radius-md); background: var(--color-primary-light); color: var(--color-primary); font-size: .875rem; }
+.appendForm { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1.5px solid var(--color-primary); border-radius: var(--radius-md); background: var(--color-primary-light); }
+.appendForm label { font-size: .85rem; font-weight: 600; }
+.appendForm textarea { width: 100%; padding: 10px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-card); color: var(--color-text); font: inherit; line-height: 1.5; resize: vertical; }
+.appendForm textarea:focus { outline: none; border-color: var(--color-primary); }
+.appendActions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 640px) { .heading, .challengeHeader { flex-direction: column; } .headingActions { width: 100%; } .headingActions button { flex: 1; } .puzzle { grid-template-columns: 1fr; } .puzzle textarea { grid-column: auto; } }

@@ -1,0 +1,74 @@
+.title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.sub {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 12px;
+}
+
+.bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.piece {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 8px 12px;
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: grab;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+  max-width: 100%;
+}
+
+.piece code {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--color-text);
+  word-break: break-all;
+}
+
+.piece:focus-visible {
+  outline: 2.5px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.piece:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+}
+
+.used {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.kindBadge {
+  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+  background: var(--color-border);
+  padding: 1px 5px;
+  border-radius: 99px;
+}

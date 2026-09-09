@@ -1,0 +1,53 @@
+.title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.context {
+  margin-top: 12px;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sep {
+  margin: 0 4px;
+}
+
+.schema {
+  margin-top: 12px;
+  font-size: 0.85rem;
+}
+
+.schemaGrid {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+}
+
+.schemaRow {
+  display: contents;
+}
+
+.field {
+  color: var(--color-primary);
+  font-size: 0.82rem;
+}
+
+.type {
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+
+.sampleDocs {
+  margin-top: 12px;
+  font-size: 0.85rem;
+}

@@ -1,0 +1,130 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background: var(--color-bg-card);
+  border-bottom: 1.5px solid var(--color-border);
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1.5px solid var(--color-border);
+  background: var(--color-bg-card);
+}
+
+.tab {
+  padding: 12px 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  transition: color var(--transition), border-color var(--transition);
+}
+
+.tab:hover { color: var(--color-text); }
+.tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.tab:focus-visible {
+  outline: 2.5px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.main {
+  flex: 1;
+  padding: 32px 24px;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.loading, .empty {
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: 48px;
+}
+
+.error {
+  color: var(--color-error);
+  text-align: center;
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.tableHead, .tableRow {
+  display: grid;
+  grid-template-columns: 50px 1fr 80px 100px 60px 80px;
+  gap: 16px;
+  padding: 12px 20px;
+  align-items: center;
+}
+
+.tableHead {
+  background: var(--color-bg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tableRow {
+  border-top: 1.5px solid var(--color-border);
+  background: var(--color-bg-card);
+  transition: background var(--transition);
+}
+
+.tableRow:hover { background: var(--color-bg); }
+
+.tableRow.first { background: #fefce8; }
+
+.rank {
+  font-weight: 700;
+  text-align: center;
+}
+
+.playerName {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.numCol {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.score {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+@media (max-width: 600px) {
+  .tableHead, .tableRow {
+    grid-template-columns: 40px 1fr 70px 80px;
+  }
+  .tableHead :nth-child(4), .tableHead :nth-child(6),
+  .tableRow :nth-child(4), .tableRow :nth-child(6) {
+    display: none;
+  }
+}

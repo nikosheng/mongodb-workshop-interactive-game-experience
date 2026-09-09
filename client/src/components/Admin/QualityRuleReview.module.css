@@ -1,0 +1,14 @@
+.panel { display: flex; flex-direction: column; gap: 14px; }
+.panel > div > p, .empty, .rule p { color: var(--color-text-secondary); line-height: 1.5; margin-top: 6px; }
+.constraints { margin: 8px 0 0 18px; color: var(--color-text-secondary); font-size: .85rem; line-height: 1.6; }
+.memory { padding: 12px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); }
+.memory summary { cursor: pointer; font-weight: 600; }
+.memory > p { color: var(--color-text-secondary); font-size: .82rem; line-height: 1.5; margin-top: 8px; }
+.memory pre { max-height: 260px; overflow: auto; margin-top: 10px; padding: 12px; border-radius: var(--radius-md); background: var(--color-bg-code); color: var(--color-text-code); white-space: pre-wrap; line-height: 1.5; }
+.memory code { font-size: .78rem; }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.rule { padding: 14px; border: 1.5px solid var(--color-border); border-radius: var(--radius-md); }
+.header { display: flex; justify-content: space-between; color: var(--color-text-secondary); font-size: .78rem; margin-bottom: 8px; }
+.category { color: var(--color-primary); font-weight: 700; text-transform: uppercase; }
+.actions { display: flex; gap: 8px; margin-top: 12px; }
+.error { color: #991b1b; background: var(--color-error-light); padding: 10px; border-radius: var(--radius-md); }

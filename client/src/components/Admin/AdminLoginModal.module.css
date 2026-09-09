@@ -1,0 +1,45 @@
+.overlay {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #111827, #1e3a8a);
+}
+
+.modal {
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 30px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+
+.eyebrow {
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.modal > p:not(.eyebrow):not(.error) {
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.modal label { font-weight: 600; font-size: 0.9rem; }
+
+.modal input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font: inherit;
+}
+
+.modal input:focus { outline: none; border-color: var(--color-primary); }
+.modal button { width: 100%; margin-top: 4px; }
+.error { color: #991b1b; font-size: 0.875rem; }
