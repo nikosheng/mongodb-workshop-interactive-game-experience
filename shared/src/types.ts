@@ -14,9 +14,19 @@ export type PuzzleKind =
   | 'operator'
   | 'value'
   | 'structure'
-  | 'stage';
+  | 'stage'
+  | 'schema-option';
 
-export type ChallengeType = 'FIND' | 'INSERT' | 'UPDATE' | 'DELETE' | 'AGGREGATE';
+export type ChallengeType = 'FIND' | 'INSERT' | 'UPDATE' | 'DELETE' | 'AGGREGATE' | 'SCHEMA_PATTERN' | 'SCHEMA_ANTIPATTERN';
+
+/** Which workshop/track a question bank or game session belongs to. */
+export type WorkshopType = 'crud' | 'schema-design';
+
+export const SCHEMA_DESIGN_CHALLENGE_TYPES: ChallengeType[] = ['SCHEMA_PATTERN', 'SCHEMA_ANTIPATTERN'];
+
+export function isSchemaDesignChallengeType(type: ChallengeType): boolean {
+  return type === 'SCHEMA_PATTERN' || type === 'SCHEMA_ANTIPATTERN';
+}
 
 export interface Puzzle {
   id: string;
@@ -42,12 +52,20 @@ export interface MqlBreakdownItem {
   explanation: string;
 }
 
+/** Per-candidate-card teaching notes for schema design challenges (SCHEMA_PATTERN / SCHEMA_ANTIPATTERN). */
+export interface OptionExplanation {
+  puzzleId: string;
+  verdict: 'correct' | 'incorrect';
+  reason: string;
+}
+
 export interface Challenge {
   id: string;
   type: ChallengeType;
   title: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced' | 'boss';
-  sql: string;
+  /** CRUD-only: the ANSI SQL prompt being translated to MQL. Not used by schema design challenges. */
+  sql?: string;
   collection: string;
   context: string;
   schema: Record<string, string>;
@@ -56,12 +74,16 @@ export interface Challenge {
   puzzles: Puzzle[];
   /** Required slot ID -> the one puzzle ID accepted for that slot. */
   answerKey: Record<string, string>;
-  /** Teaching notes explaining each MQL fragment and its position. */
+  /** Teaching notes explaining each MQL fragment and its position. CRUD-only. */
   mqlBreakdown?: MqlBreakdownItem[];
-  /** The structured answer to validate against (used by evaluator) */
-  expected: ExpectedAnswer;
+  /** The structured answer to validate against (used by evaluator). CRUD-only. */
+  expected?: ExpectedAnswer;
   concept: string;
   hint: string;
+  /** Schema design-only: the official pattern/anti-pattern name of the correct card. */
+  patternName?: string;
+  /** Schema design-only: teaching notes for every candidate card (correct and distractors). */
+  optionExplanations?: OptionExplanation[];
 }
 
 export type QuestionBankStatus = 'generating' | 'review' | 'ready' | 'error';
@@ -76,6 +98,13 @@ export interface GlobalBankConstraints {
   minDistractorsPerRequiredSlot: number;
 }
 
+export interface SchemaDesignBankConstraints {
+  requiredDifficulties: Array<'beginner' | 'intermediate' | 'advanced' | 'boss'>;
+  minCandidateCardsPerChallenge: number;
+  requireOptionExplanations: boolean;
+  requireAnswerKey: boolean;
+}
+
 export interface QuestionBank {
   _id: string;
   name: string;
@@ -87,6 +116,8 @@ export interface QuestionBank {
   createdAt: string;
   updatedAt?: string;
   isActive: boolean;
+  /** Which workshop this bank belongs to. Defaults to 'crud' for legacy banks. */
+  workshopType: WorkshopType;
 }
 
 // ─── Expected Answer AST ──────────────────────────────────────────────────
@@ -168,6 +199,7 @@ export interface GameSession {
   playerId: string;
   roomId?: string;
   mode: GameMode;
+  workshopType: WorkshopType;
   challengeVersion: string;
   startedAt: Date;
   completedAt?: Date;
@@ -193,6 +225,7 @@ export interface LeaderboardEntry {
   sessionId: string;
   roomId?: string;
   mode: GameMode;
+  workshopType: WorkshopType;
   totalScore: number;
   completionMs: number;
   hintsUsed: number;
@@ -223,6 +256,7 @@ export interface Room {
   players: RoomPlayer[];
   maxPlayers: number;
   challengeSetId: string;
+  workshopType: WorkshopType;
   startedAt?: Date;
   finishedAt?: Date;
   createdAt: Date;
@@ -232,6 +266,7 @@ export interface Room {
 
 export interface CreateRoomRequest {
   challengeSetId?: string;
+  workshopType?: WorkshopType;
 }
 
 export interface JoinRoomRequest {

@@ -10,7 +10,7 @@ function generateRoomCode(): string {
 }
 
 router.post('/rooms', requireAuth, async (req: Request, res: Response) => {
-  const schema = z.object({ challengeSetId: z.string().optional() });
+  const schema = z.object({ challengeSetId: z.string().optional(), workshopType: z.enum(['crud', 'schema-design']).default('crud') });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: '輸入格式有誤' });
@@ -34,8 +34,9 @@ router.post('/rooms', requireAuth, async (req: Request, res: Response) => {
     hostId: playerId,
     status: 'lobby',
     players: [{ playerId, name: playerName, isReady: false, isHost: true }],
-    maxPlayers: 8,
+    maxPlayers: 50,
     challengeSetId: parsed.data.challengeSetId || 'default',
+    workshopType: parsed.data.workshopType,
     createdAt: new Date(),
   };
 

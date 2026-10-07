@@ -38,8 +38,8 @@ app.use(sessionMiddleware);
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
+  windowMs: 60 * 1000,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: '請求過於頻繁，請稍後再試' },

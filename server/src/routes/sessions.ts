@@ -5,13 +5,19 @@ import { getDb } from '../db/client.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validateAnswer, calculateScore } from '@query-quest/shared';
 import { challenges } from '../lib/challengeData.js';
-import type { Challenge, SlotAssignment } from '@query-quest/shared';
+import { schemaDesignChallenges } from '../lib/schemaDesignChallengeData.js';
+import type { Challenge, SlotAssignment, WorkshopType } from '@query-quest/shared';
 
 const router = Router();
+
+function defaultChallengesFor(workshopType: WorkshopType): Challenge[] {
+  return workshopType === 'schema-design' ? schemaDesignChallenges : challenges;
+}
 
 // Create a solo game session
 const createSessionSchema = z.object({
   mode: z.enum(['solo', 'multiplayer']).default('solo'),
+  workshopType: z.enum(['crud', 'schema-design']).default('crud'),
   roomId: z.string().optional(),
 });
 
@@ -23,18 +29,20 @@ router.post('/sessions', requireAuth, async (req: Request, res: Response) => {
     return;
   }
   const playerId = req.session.playerId!;
+  const workshopType = parsed.data.workshopType;
   const activeBank = await db.collection<{ _id: ObjectId; challenges: unknown[] }>('questionBanks').findOne(
-    { isActive: true, status: 'ready' },
+    { isActive: true, status: 'ready', workshopType },
     { projection: { _id: 1, challenges: 1 } },
   );
 
   const session = await db.collection('gameSessions').insertOne({
     playerId,
     mode: parsed.data.mode,
+    workshopType,
     ...(parsed.data.roomId ? { roomId: parsed.data.roomId } : {}),
     challengeVersion: '1.0',
     challengeBankId: activeBank?._id.toString() ?? 'default',
-    totalChallenges: activeBank?.challenges.length ?? challenges.length,
+    totalChallenges: activeBank?.challenges.length ?? defaultChallengesFor(workshopType).length,
     startedAt: new Date(),
     status: 'active',
   });
@@ -64,9 +72,9 @@ router.post('/sessions/attempt', requireAuth, async (req: Request, res: Response
   const db = getDb();
 
   // Verify session belongs to this player
-  let sessionDoc: { _id: ObjectId; playerId: string; challengeBankId?: string } | null = null;
+  let sessionDoc: { _id: ObjectId; playerId: string; challengeBankId?: string; workshopType?: WorkshopType } | null = null;
   try {
-    sessionDoc = await db.collection<{ _id: ObjectId; playerId: string; challengeBankId?: string }>('gameSessions').findOne({ _id: new ObjectId(sessionId) });
+    sessionDoc = await db.collection<{ _id: ObjectId; playerId: string; challengeBankId?: string; workshopType?: WorkshopType }>('gameSessions').findOne({ _id: new ObjectId(sessionId) });
   } catch {
     res.status(400).json({ error: 'Invalid session ID' });
     return;
@@ -85,7 +93,7 @@ router.post('/sessions/attempt', requireAuth, async (req: Request, res: Response
     );
     challenge = bank?.challenges.find((item) => item.id === challengeId);
   } else {
-    challenge = challenges.find((item) => item.id === challengeId);
+    challenge = defaultChallengesFor(sessionDoc.workshopType ?? 'crud').find((item) => item.id === challengeId);
   }
   if (!challenge) {
     res.status(404).json({ error: 'Challenge not found' });
@@ -150,9 +158,9 @@ router.post('/sessions/complete', requireAuth, async (req: Request, res: Respons
   const db = getDb();
 
   // Verify session
-  let sessionDoc: { _id: ObjectId; playerId: string; startedAt: Date; totalChallenges?: number; mode?: 'solo' | 'multiplayer'; roomId?: string } | null = null;
+  let sessionDoc: { _id: ObjectId; playerId: string; startedAt: Date; totalChallenges?: number; mode?: 'solo' | 'multiplayer'; roomId?: string; workshopType?: WorkshopType } | null = null;
   try {
-    sessionDoc = await db.collection<{ _id: ObjectId; playerId: string; startedAt: Date; totalChallenges?: number; mode?: 'solo' | 'multiplayer'; roomId?: string }>('gameSessions').findOne({ _id: new ObjectId(sessionId) });
+    sessionDoc = await db.collection<{ _id: ObjectId; playerId: string; startedAt: Date; totalChallenges?: number; mode?: 'solo' | 'multiplayer'; roomId?: string; workshopType?: WorkshopType }>('gameSessions').findOne({ _id: new ObjectId(sessionId) });
   } catch {
     res.status(400).json({ error: 'Invalid session ID' });
     return;
@@ -191,16 +199,18 @@ router.post('/sessions/complete', requireAuth, async (req: Request, res: Respons
   );
 
   if (submitToLeaderboard) {
+    const workshopType = sessionDoc.workshopType ?? 'crud';
     await db.collection('leaderboardEntries').insertOne({
         playerId,
         playerName,
         sessionId,
         mode: sessionDoc.mode ?? 'solo',
+        workshopType,
         ...(sessionDoc.roomId ? { roomId: sessionDoc.roomId } : {}),
       totalScore,
       completionMs,
       hintsUsed,
-        totalChallenges: sessionDoc.totalChallenges ?? challenges.length,
+        totalChallenges: sessionDoc.totalChallenges ?? defaultChallengesFor(workshopType).length,
       completedAt,
     });
   }

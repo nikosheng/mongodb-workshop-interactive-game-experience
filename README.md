@@ -16,6 +16,7 @@
 - **Leaderboard**：MongoDB Atlas 持久化，server 端計分
 - **LLM 題庫生成器**：可複製 Prompt 給 AI 生成自訂題目並載入
 - **響應式設計**：桌面、平板、手機均可使用
+- **Schema Design Workshop**：獨立的第二個工作坊，練習辨識 MongoDB 官方 design pattern / anti-pattern（Embedding vs Referencing、Extended Reference、Attribute Pattern、Massive Arrays 等），沿用同一套拖拉機制、AI 出題與計分流程，單人與多人模式皆可切換工作坊類型
 
 ---
 
@@ -168,6 +169,13 @@ make typecheck  # tsc --noEmit（shared + client + server）
 4. 點擊「載入」—— 系統會做 schema validation 後合併到現有題庫
 
 **Challenge 型別**的完整欄位說明請參考 `shared/src/types.ts`。
+
+### Schema Design Workshop 出題
+
+- 玩家在「選擇工作坊」畫面可切換 CRUD Workshop / Schema Design Workshop，兩者各自擁有獨立的題庫（`questionBanks.workshopType`）、遊戲 session、房間與排行榜資料。
+- 管理後台（`/admin`）新增頂層 tab 切換兩個工作坊，題庫生成、審核、品質規則與排行榜皆依 tab 篩選。
+- Schema Design 題目固定為「情境題幹 + 3 張候選設計卡（1 正解 + 2 干擾）」，機制與 CRUD 題目共用同一套拖拉插槽與 `answerKey` 驗證邏輯，差異僅在候選卡內容（`patternName`、`optionExplanations`），詳見 `server/src/lib/schemaDesignLlm.ts`。
+- 難度沿用 beginner/intermediate/advanced/boss 四級：beginner 為 Embedding vs Referencing 基礎決策，intermediate 為單一具名 design pattern 辨識，advanced 為多因素權衡，boss 以 anti-pattern 診斷為主。
 
 ---
 

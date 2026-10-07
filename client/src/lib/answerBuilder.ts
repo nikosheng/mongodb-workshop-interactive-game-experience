@@ -83,6 +83,12 @@ export function buildAnswer(
           pipeline,
         };
       }
+
+      // Schema design challenges are validated purely by answerKey matching
+      // (see shared/src/validator.ts); there is no MQL AST to build.
+      case 'SCHEMA_PATTERN':
+      case 'SCHEMA_ANTIPATTERN':
+        return null;
     }
   } catch {
     return null;
@@ -152,6 +158,8 @@ export function buildMqlPreview(
         return `db.${challenge.collection}.${cmd.label}([\n${stageStr}\n])`;
       }
 
+      case 'SCHEMA_PATTERN':
+      case 'SCHEMA_ANTIPATTERN':
       default:
         return '';
     }

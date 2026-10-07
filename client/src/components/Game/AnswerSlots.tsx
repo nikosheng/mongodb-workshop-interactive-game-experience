@@ -1,4 +1,5 @@
 import type { Challenge, Puzzle } from '@query-quest/shared';
+import { isSchemaDesignChallengeType } from '@query-quest/shared';
 import { useDroppable } from '@dnd-kit/core';
 import styles from './AnswerSlots.module.css';
 import type { SlotAssignmentMap } from '../../lib/answerBuilder';
@@ -73,7 +74,7 @@ function SlotItem({
 export function AnswerSlots({ challenge, assignments, selectedPuzzle, feedback, onSlotClick, embedded = false }: Props) {
   const content = (
     <>
-      <h3 className={styles.title}>拼出你的 MQL</h3>
+      <h3 className={styles.title}>{isSchemaDesignChallengeType(challenge.type) ? '選出最佳設計' : '拼出你的 MQL'}</h3>
       <div className={styles.slots}>
         {challenge.slots.map(slot => (
           <SlotItem

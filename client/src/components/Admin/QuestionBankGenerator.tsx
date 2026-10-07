@@ -1,13 +1,20 @@
 import { useState } from 'react';
+import type { WorkshopType } from '@query-quest/shared';
 import { apiAdminPost } from '../../hooks/useApi';
 import styles from './QuestionBankGenerator.module.css';
 
 interface Props {
   secret: string;
+  workshopType: WorkshopType;
   onGenerated: () => void;
 }
 
-export function QuestionBankGenerator({ secret, onGenerated }: Props) {
+const placeholderByWorkshop: Record<WorkshopType, string> = {
+  crud: '描述你的挑戰情境，例如：電商用戶 360 度分析場景，包含會員分群、訂單與商品偏好...',
+  'schema-design': '描述你想讓玩家練習的 schema design 情境，例如：社群平台的貼文與留言系統，需要練習判斷該用 Embedding 還是 Referencing...',
+};
+
+export function QuestionBankGenerator({ secret, workshopType, onGenerated }: Props) {
   const [name, setName] = useState('');
   const [useCase, setUseCase] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -18,7 +25,7 @@ export function QuestionBankGenerator({ secret, onGenerated }: Props) {
     setStatus(null);
     setGenerating(true);
     try {
-      const result = await apiAdminPost<{ bank: { challenges: unknown[] } }>('/api/question-banks/generate', { name, useCase }, secret);
+      const result = await apiAdminPost<{ bank: { challenges: unknown[] } }>('/api/question-banks/generate', { name, useCase, workshopType }, secret);
       setName('');
       setUseCase('');
       setStatus({ type: 'success', message: `題庫已生成，共 ${result.bank.challenges.length} 題。` });
@@ -52,7 +59,7 @@ export function QuestionBankGenerator({ secret, onGenerated }: Props) {
           id="use-case"
           value={useCase}
           onChange={(event) => setUseCase(event.target.value)}
-          placeholder="描述你的挑戰情境，例如：電商用戶 360 度分析場景，包含會員分群、訂單與商品偏好..."
+          placeholder={placeholderByWorkshop[workshopType]}
           rows={5}
           maxLength={2000}
           disabled={generating}

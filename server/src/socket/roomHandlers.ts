@@ -28,8 +28,9 @@ export function registerRoomHandlers(io: Server, socket: AppSocket): void {
         hostId: playerId,
         status: 'lobby' as const,
         players: [{ playerId, name: playerName, isReady: false, isHost: true }],
-        maxPlayers: 8,
+        maxPlayers: 50,
         challengeSetId: data.challengeSetId || 'default',
+        workshopType: data.workshopType === 'schema-design' ? 'schema-design' as const : 'crud' as const,
         createdAt: new Date(),
       };
 
@@ -50,7 +51,7 @@ export function registerRoomHandlers(io: Server, socket: AppSocket): void {
 
       if (!room) { cb(null, '找不到此房間'); return; }
       if (room['status'] !== 'lobby') { cb(null, '遊戲已開始，無法加入'); return; }
-      if (room['players'].length >= room['maxPlayers']) { cb(null, '房間已滿（最多 8 人）'); return; }
+      if (room['players'].length >= room['maxPlayers']) { cb(null, '房間已滿（最多 50 人）'); return; }
       if ((room['players'] as { playerId: string }[]).some(p => p.playerId === playerId)) {
         // Already in room - rejoin
         await socket.join(`room:${code}`);
@@ -180,6 +181,7 @@ export function registerRoomHandlers(io: Server, socket: AppSocket): void {
         sessionId: data.sessionId,
         roomId: room['_id'].toString(),
         mode: 'multiplayer',
+        workshopType: (room['workshopType'] as string | undefined) === 'schema-design' ? 'schema-design' : 'crud',
         totalScore,
         completionMs: completedAt.getTime() - (room['startedAt'] as Date).getTime(),
         hintsUsed,

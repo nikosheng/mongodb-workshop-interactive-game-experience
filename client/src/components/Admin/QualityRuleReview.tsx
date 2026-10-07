@@ -1,26 +1,27 @@
 import { useEffect, useState } from 'react';
+import type { WorkshopType } from '@query-quest/shared';
 import { apiAdminGet, apiAdminPost } from '../../hooks/useApi';
 import styles from './QualityRuleReview.module.css';
 
 interface RuleSuggestion { _id: string; rule: string; rationale: string; category: string; status: 'pending' | 'approved' | 'rejected'; }
-interface Props { secret: string; refreshKey: number; }
+interface Props { secret: string; workshopType: WorkshopType; refreshKey: number; }
 
-export function QualityRuleReview({ secret, refreshKey }: Props) {
+export function QualityRuleReview({ secret, workshopType, refreshKey }: Props) {
   const [suggestions, setSuggestions] = useState<RuleSuggestion[]>([]);
   const [memory, setMemory] = useState('');
   const [error, setError] = useState('');
   const load = async () => {
     try {
       const [result, memoryResult] = await Promise.all([
-        apiAdminGet<{ suggestions: RuleSuggestion[] }>('/api/question-banks/quality-rules', secret),
-        apiAdminGet<{ memory: string }>('/api/question-banks/quality-rules/memory', secret),
+        apiAdminGet<{ suggestions: RuleSuggestion[] }>(`/api/question-banks/quality-rules?workshopType=${workshopType}`, secret),
+        apiAdminGet<{ memory: string }>(`/api/question-banks/quality-rules/memory?workshopType=${workshopType}`, secret),
       ]);
       setSuggestions(result.suggestions);
       setMemory(memoryResult.memory);
     }
     catch (err) { setError(err instanceof Error ? err.message : '無法讀取全域規則'); }
   };
-  useEffect(() => { void load(); }, [secret, refreshKey]);
+  useEffect(() => { void load(); }, [secret, workshopType, refreshKey]);
   const update = async (id: string, action: 'approve' | 'reject') => {
     try { await apiAdminPost(`/api/question-banks/quality-rules/${id}/${action}`, {}, secret); await load(); }
     catch (err) { setError(err instanceof Error ? err.message : '更新規則失敗'); }

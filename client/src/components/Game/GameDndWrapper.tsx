@@ -14,10 +14,14 @@ interface Props {
 }
 
 export function GameDndWrapper({ challenge, setAssignments, children }: Props) {
+  const isTouchDevice = typeof window !== 'undefined'
+    && (window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
+  const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
+  const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } });
+  const keyboardSensor = useSensor(KeyboardSensor);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
-    useSensor(KeyboardSensor),
+    ...(isTouchDevice ? [] : [pointerSensor, touchSensor]),
+    keyboardSensor,
   );
 
   const handleDragEnd = (event: DragEndEvent) => {

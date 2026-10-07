@@ -5,7 +5,7 @@
  * 3. Semantic validation: does executing the answer on sample data match expected output?
  */
 
-import type { Challenge, Puzzle, Slot, ExpectedAnswer } from './types.js';
+import type { Challenge, Puzzle, Slot, ExpectedAnswer, MongoPipelineStage } from './types.js';
 import { executeInMemory, matchesFilter } from './evaluator.js';
 
 export interface SlotAssignment {
@@ -75,6 +75,9 @@ export function validateStructure(
 ): string[] {
   const errors: string[] = [];
   const expected = challenge.expected;
+  if (!expected) {
+    return ['此題型沒有可比對的 expected 結構（schema design 題目不適用結構驗證）。'];
+  }
 
   if (builtAnswer.type !== expected.type) {
     errors.push(`指令類型錯誤：期望 ${expected.type}，得到 ${builtAnswer.type}`);
@@ -105,7 +108,7 @@ export function validateStructure(
     if (expPipeline.length !== gotPipeline.length) {
       errors.push(`Pipeline 階段數量錯誤：期望 ${expPipeline.length}，得到 ${gotPipeline.length}`);
     } else {
-      expPipeline.forEach((stage, i) => {
+      expPipeline.forEach((stage: MongoPipelineStage, i: number) => {
         const expStageKey = Object.keys(stage)[0];
         const gotStageKey = gotPipeline[i] ? Object.keys(gotPipeline[i])[0] : '(缺少)';
         if (expStageKey !== gotStageKey) {
@@ -143,6 +146,9 @@ export function validateSemantics(
 ): string[] {
   const errors: string[] = [];
   const docs = challenge.sampleDocuments as Record<string, unknown>[];
+  if (!challenge.expected) {
+    return ['此題型沒有可執行的 expected 結構（schema design 題目不適用語意驗證）。'];
+  }
 
   try {
     const gotResult = executeInMemory(docs, builtAnswer);

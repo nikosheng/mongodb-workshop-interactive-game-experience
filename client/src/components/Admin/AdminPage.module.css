@@ -60,6 +60,28 @@
   line-height: 1.6;
 }
 
+.workshopTabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1.5px solid var(--color-border);
+}
+
+.workshopTab {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  padding: 10px 16px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.workshopTabActive {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
 @media (max-width: 640px) {
   .header {
     align-items: flex-start;

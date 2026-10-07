@@ -1,4 +1,5 @@
 import type { Challenge } from '@query-quest/shared';
+import { isSchemaDesignChallengeType } from '@query-quest/shared';
 import styles from './FeedbackPanel.module.css';
 
 interface FeedbackState {
@@ -16,12 +17,31 @@ interface Props {
   isLastChallenge: boolean;
 }
 
+function SchemaDesignExplanation({ challenge }: { challenge: Challenge }) {
+  const puzzleLabel = (puzzleId: string) => challenge.puzzles.find((p) => p.id === puzzleId)?.label ?? puzzleId;
+  return (
+    <div className={styles.breakdown}>
+      {(challenge.optionExplanations ?? []).map((item) => (
+        <article className={styles.breakdownItem} key={item.puzzleId}>
+          <div className={styles.breakdownHeading}>
+            <strong>{puzzleLabel(item.puzzleId)}</strong>
+            <code>{item.verdict === 'correct' ? '✓ 最佳設計' : '✗ 有缺陷'}</code>
+          </div>
+          <p>{item.reason}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export function FeedbackPanel({ feedback, challenge, attemptCount, onNext, isLastChallenge }: Props) {
   if (!feedback) return null;
+  const isSchemaDesign = isSchemaDesignChallengeType(challenge.type);
 
-  // Build the "correct" MQL from expected
+  // Build the "correct" MQL from expected (CRUD challenges only).
   const buildExpectedMql = (): string => {
     const exp = challenge.expected;
+    if (!exp) return '';
     const fmt = (v: unknown) => JSON.stringify(v, null, 2);
     switch (exp.type) {
       case 'FIND': {
@@ -40,14 +60,15 @@ export function FeedbackPanel({ feedback, challenge, attemptCount, onNext, isLas
         return `db.${exp.collection}.${exp.multi ? 'deleteMany' : 'deleteOne'}(\n  ${fmt(exp.filter)}\n)`;
       case 'AGGREGATE':
         return `db.${exp.collection}.aggregate([\n${exp.pipeline.map(s => `  ${fmt(s)}`).join(',\n')}\n])`;
+      default:
+        return '';
     }
   };
 
   const expectedMql = buildExpectedMql();
-
   const breakdown = challenge.mqlBreakdown ?? [];
 
-  const renderBreakdown = () => (
+  const renderCrudBreakdown = () => (
     <div className={styles.breakdown}>
       {breakdown.length === 0 ? (
         <p className={styles.concept}>這是舊版題庫，尚未提供逐段 MQL 解釋。</p>
@@ -76,22 +97,37 @@ export function FeedbackPanel({ feedback, challenge, attemptCount, onNext, isLas
           )}
         </div>
 
-        <div className={styles.section}>
-          <strong>概念說明</strong>
-          <p className={styles.concept}>{challenge.concept}</p>
-        </div>
+        {isSchemaDesign ? (
+          <>
+            <div className={styles.section}>
+              <strong>正確設計模式</strong>
+              <p className={styles.concept}>{challenge.patternName}</p>
+            </div>
+            <div className={styles.section}>
+              <strong>每個選項的解說</strong>
+              <SchemaDesignExplanation challenge={challenge} />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={styles.section}>
+              <strong>概念說明</strong>
+              <p className={styles.concept}>{challenge.concept}</p>
+            </div>
 
-        <div className={styles.section}>
-          <strong>正確的 MQL</strong>
-          <pre className="code-block" style={{ marginTop: '8px', fontSize: '0.8rem' }}>
-            <code>{expectedMql}</code>
-          </pre>
-        </div>
+            <div className={styles.section}>
+              <strong>正確的 MQL</strong>
+              <pre className="code-block" style={{ marginTop: '8px', fontSize: '0.8rem' }}>
+                <code>{expectedMql}</code>
+              </pre>
+            </div>
 
-        <div className={styles.section}>
-          <strong>逐段拆解</strong>
-          {renderBreakdown()}
-        </div>
+            <div className={styles.section}>
+              <strong>逐段拆解</strong>
+              {renderCrudBreakdown()}
+            </div>
+          </>
+        )}
 
         <button
           className="btn btn-primary"
@@ -118,22 +154,31 @@ export function FeedbackPanel({ feedback, challenge, attemptCount, onNext, isLas
         ))}
       </ul>
 
-      <div className={styles.section}>
-        <strong>正確答案（參考）</strong>
-        <pre className="code-block" style={{ marginTop: '8px', fontSize: '0.8rem' }}>
-          <code>{expectedMql}</code>
-        </pre>
-      </div>
+      {isSchemaDesign ? (
+        <div className={styles.section}>
+          <strong>概念說明</strong>
+          <p className={styles.concept}>{challenge.concept}</p>
+        </div>
+      ) : (
+        <>
+          <div className={styles.section}>
+            <strong>正確答案（參考）</strong>
+            <pre className="code-block" style={{ marginTop: '8px', fontSize: '0.8rem' }}>
+              <code>{expectedMql}</code>
+            </pre>
+          </div>
 
-      <div className={styles.section}>
-        <strong>概念說明</strong>
-        <p className={styles.concept}>{challenge.concept}</p>
-      </div>
+          <div className={styles.section}>
+            <strong>概念說明</strong>
+            <p className={styles.concept}>{challenge.concept}</p>
+          </div>
 
-      <div className={styles.section}>
-        <strong>逐段拆解</strong>
-        {renderBreakdown()}
-      </div>
+          <div className={styles.section}>
+            <strong>逐段拆解</strong>
+            {renderCrudBreakdown()}
+          </div>
+        </>
+      )}
 
       <p className={styles.retry}>修改拼圖後可再次按「檢查答案」繼續嘗試。</p>
     </div>

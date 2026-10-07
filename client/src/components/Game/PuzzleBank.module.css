@@ -72,3 +72,77 @@
   padding: 1px 5px;
   border-radius: 99px;
 }
+
+.schemaCard {
+  width: 100%;
+  min-width: 0;
+  gap: 6px;
+  align-items: stretch;
+  text-align: left;
+  font-family: var(--font-sans);
+}
+
+.schemaBank {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.schemaCardTitle {
+  font-size: 0.9rem;
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+.schemaCardSummary {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  text-align: left;
+}
+
+.schemaCardCode {
+  display: block;
+  min-width: 0;
+  margin-top: 4px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-card);
+  text-align: left;
+}
+
+.schemaCardCodeLabel {
+  display: block;
+  padding: 8px;
+  padding-bottom: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.schemaCardSnippet {
+  display: block;
+  padding: 6px 8px 8px;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+@media (max-width: 1000px) {
+  .schemaBank {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .schemaBank {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
 import type { AuthUser } from '../../App';
-import type { Room } from '@query-quest/shared';
+import type { Room, WorkshopType } from '@query-quest/shared';
 import { getSocket, connectSocket, useSocketEvent } from '../../hooks/useSocket';
 import styles from './LobbyPage.module.css';
 
 interface Props {
   user: AuthUser;
   roomCode?: string;
-  onGameStart: (code: string) => void;
+  workshopType: WorkshopType;
+  onGameStart: (code: string, workshopType: WorkshopType) => void;
   onBack: () => void;
 }
 
-export function LobbyPage({ user, roomCode: initialCode, onGameStart, onBack }: Props) {
+const workshopLabel: Record<WorkshopType, string> = {
+  crud: 'CRUD Workshop',
+  'schema-design': 'Schema Design Workshop',
+};
+
+export function LobbyPage({ user, roomCode: initialCode, workshopType, onGameStart, onBack }: Props) {
   const [room, setRoom] = useState<Room | null>(null);
   const [joinCode, setJoinCode] = useState(initialCode || '');
   const [error, setError] = useState('');
@@ -36,8 +42,9 @@ export function LobbyPage({ user, roomCode: initialCode, onGameStart, onBack }: 
 
   useSocketEvent('roomUpdated', (r: Room) => setRoom(r));
   useSocketEvent('gameStarted', ({ room: r }) => {
-    setRoom(r as Room);
-    onGameStart((r as Room).code);
+    const room = r as Room;
+    setRoom(room);
+    onGameStart(room.code, room.workshopType ?? 'crud');
   });
   useSocketEvent('roomClosed', (reason: string) => {
     setError(`房間已關閉：${reason}`);
@@ -52,7 +59,7 @@ export function LobbyPage({ user, roomCode: initialCode, onGameStart, onBack }: 
     setLoading(true);
     setError('');
     const socket = getSocket();
-    socket.emit('createRoom', {}, (r, err) => {
+    socket.emit('createRoom', { workshopType }, (r, err) => {
       setLoading(false);
       if (err || !r) { setError(err || '建立失敗'); return; }
       setRoom(r as Room);
@@ -98,7 +105,7 @@ export function LobbyPage({ user, roomCode: initialCode, onGameStart, onBack }: 
       <div className={styles.page}>
         <header className={styles.header}>
           <button className="btn btn-ghost" onClick={onBack}>← 返回</button>
-          <h2>多人大廳</h2>
+          <h2>多人大廳 · {workshopLabel[workshopType]}</h2>
         </header>
         <main className={styles.main}>
           <div className={styles.options}>
@@ -143,7 +150,7 @@ export function LobbyPage({ user, roomCode: initialCode, onGameStart, onBack }: 
     <div className={styles.page}>
       <header className={styles.header}>
         <button className="btn btn-ghost" onClick={handleLeave}>← 離開</button>
-        <h2>房間：<code className={styles.roomCode}>{room.code}</code></h2>
+        <h2>房間：<code className={styles.roomCode}>{room.code}</code> · {workshopLabel[room.workshopType ?? 'crud']}</h2>
         {isHost && <span className={styles.hostBadge}>房主</span>}
       </header>
 

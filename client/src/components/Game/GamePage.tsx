@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AuthUser } from '../../App';
-import type { Puzzle, Challenge, QuestionBank, SlotAssignment } from '@query-quest/shared';
-import { validateAnswer } from '@query-quest/shared';
+import type { Puzzle, Challenge, QuestionBank, SlotAssignment, WorkshopType } from '@query-quest/shared';
+import { validateAnswer, isSchemaDesignChallengeType } from '@query-quest/shared';
 import { defaultChallenges } from '../../data/challenges';
+import { defaultSchemaDesignChallenges } from '../../data/schemaDesignChallenges';
 import { buildMqlPreview } from '../../lib/answerBuilder';
 import type { SlotAssignmentMap } from '../../lib/answerBuilder';
 import { apiGet, apiPost } from '../../hooks/useApi';
@@ -19,6 +20,7 @@ import styles from './GamePage.module.css';
 interface Props {
   user: AuthUser;
   mode: 'solo' | 'multiplayer';
+  workshopType: WorkshopType;
   roomCode?: string;
   onFinish: () => void;
   onBack: () => void;
@@ -32,8 +34,10 @@ type FeedbackState =
 // Initialize challenge start time outside component to avoid impure render
 const GAME_START_TIME = performance.now();
 
-export function GamePage({ user, mode, roomCode, onFinish, onBack }: Props) {
-  const [challenges, setChallenges] = useState<Challenge[]>(defaultChallenges);
+export function GamePage({ user, mode, workshopType, roomCode, onFinish, onBack }: Props) {
+  const [challenges, setChallenges] = useState<Challenge[]>(() => (
+    workshopType === 'schema-design' ? defaultSchemaDesignChallenges : defaultChallenges
+  ));
   const [loadingChallengeBank, setLoadingChallengeBank] = useState(true);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -49,21 +53,71 @@ export function GamePage({ user, mode, roomCode, onFinish, onBack }: Props) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [completedScores, setCompletedScores] = useState<Record<string, number>>({});
   const [submittingToLeaderboard, setSubmittingToLeaderboard] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const exitConfirmationPendingRef = useRef(false);
+  const browserExitPendingRef = useRef(false);
+  const exitConfirmedRef = useRef(false);
   // Use a mutable ref container to avoid the impure Date.now() warning
   const challengeStartRef = useRef({ ts: GAME_START_TIME });
+
+  const requestExit = useCallback(() => {
+    if (exitConfirmationPendingRef.current || exitConfirmedRef.current) return;
+    exitConfirmationPendingRef.current = true;
+    setShowExitConfirm(true);
+  }, []);
+
+  const cancelExit = () => {
+    exitConfirmationPendingRef.current = false;
+    browserExitPendingRef.current = false;
+    setShowExitConfirm(false);
+  };
+
+  const confirmExit = () => {
+    const returnToPreviousPage = browserExitPendingRef.current;
+    exitConfirmationPendingRef.current = false;
+    browserExitPendingRef.current = false;
+    exitConfirmedRef.current = true;
+    setShowExitConfirm(false);
+    onBack();
+    if (returnToPreviousPage) window.history.back();
+  };
+
+  useEffect(() => {
+    const guardedUrl = window.location.href;
+    window.history.pushState({ queryQuestGameExitGuard: true }, '', guardedUrl);
+
+    const handlePopState = () => {
+      if (exitConfirmedRef.current) return;
+      browserExitPendingRef.current = true;
+      window.history.pushState({ queryQuestGameExitGuard: true }, '', guardedUrl);
+      requestExit();
+    };
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (exitConfirmedRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [requestExit]);
 
   const challenge = challenges[currentIndex]!;
 
   useEffect(() => {
     if (mode === 'solo' || mode === 'multiplayer') {
-      apiPost<{ sessionId: string }>('/api/sessions', { mode, roomId: roomCode })
+      apiPost<{ sessionId: string }>('/api/sessions', { mode, workshopType, roomId: roomCode })
         .then(r => setSessionId(r.sessionId))
         .catch((error) => setServerSyncError(error instanceof Error ? error.message : '無法建立遊戲 session，請重新登入。'));
     }
-  }, [mode, roomCode]);
+  }, [mode, workshopType, roomCode]);
 
   useEffect(() => {
-    apiGet<{ bank: QuestionBank | null }>('/api/question-banks/active')
+    apiGet<{ bank: QuestionBank | null }>(`/api/question-banks/active?workshopType=${workshopType}`)
       .then(({ bank }) => {
         if (bank?.challenges.length) {
           setChallenges(bank.challenges);
@@ -74,7 +128,7 @@ export function GamePage({ user, mode, roomCode, onFinish, onBack }: Props) {
         // A missing or unavailable bank should not prevent the default game from starting.
       })
       .finally(() => setLoadingChallengeBank(false));
-  }, []);
+  }, [workshopType]);
 
   const mqlPreview = buildMqlPreview(challenge, assignments);
 
@@ -234,12 +288,26 @@ export function GamePage({ user, mode, roomCode, onFinish, onBack }: Props) {
 
   const totalScore = Object.values(completedScores).reduce((a, b) => a + b, 0);
   const isLastChallenge = currentIndex === challenges.length - 1;
+  const isSchemaDesign = isSchemaDesignChallengeType(challenge.type);
 
   if (loadingChallengeBank) {
     return (
-      <div className={styles.loading} role="status">
-        載入題庫中...
-      </div>
+      <>
+        <div className={styles.loading} role="status">
+          載入題庫中...
+        </div>
+        {showExitConfirm && (
+          <ConfirmDialog
+            title="確定離開遊戲？"
+            message="離開後會返回模式選擇畫面，確定要離開目前遊戲嗎？"
+            confirmLabel="離開遊戲"
+            cancelLabel="繼續遊戲"
+            confirmVariant="danger"
+            onConfirm={confirmExit}
+            onCancel={cancelExit}
+          />
+        )}
+      </>
     );
   }
 
@@ -251,7 +319,7 @@ export function GamePage({ user, mode, roomCode, onFinish, onBack }: Props) {
           currentIndex={currentIndex}
           totalChallenges={challenges.length}
           totalScore={totalScore}
-          onBack={onBack}
+          onBack={requestExit}
           onReset={() => setShowResetConfirm(true)}
           playerName={user.name}
         />
@@ -263,10 +331,10 @@ export function GamePage({ user, mode, roomCode, onFinish, onBack }: Props) {
 
           <section className={`card ${styles.workspace}`} aria-labelledby="mql-workspace-title">
             <header className={styles.workspaceHeader}>
-              <p>SQL to MongoDB Query Language</p>
-              <h2 id="mql-workspace-title">MQL 組裝台</h2>
+              <p>{isSchemaDesign ? 'MongoDB Schema Design' : 'SQL to MongoDB Query Language'}</p>
+              <h2 id="mql-workspace-title">{isSchemaDesign ? '設計選擇台' : 'MQL 組裝台'}</h2>
             </header>
-            <div className={styles.workspaceGrid}>
+            <div className={`${styles.workspaceGrid} ${isSchemaDesign ? styles.schemaWorkspaceGrid : ''}`}>
               <div className={styles.answerSection}>
                 <AnswerSlots
                   challenge={challenge}
@@ -287,13 +355,15 @@ export function GamePage({ user, mode, roomCode, onFinish, onBack }: Props) {
                 />
               </div>
             </div>
-            <div className={styles.previewSection}>
-              <MqlPreview
-                preview={mqlPreview}
-                collection={challenge.collection}
-                embedded
-              />
-            </div>
+            {!isSchemaDesign && (
+              <div className={styles.previewSection}>
+                <MqlPreview
+                  preview={mqlPreview}
+                  collection={challenge.collection}
+                  embedded
+                />
+              </div>
+            )}
           </section>
 
           <div className={styles.controlsSection}>
@@ -338,6 +408,18 @@ export function GamePage({ user, mode, roomCode, onFinish, onBack }: Props) {
             confirmVariant="danger"
             onConfirm={handleReset}
             onCancel={() => setShowResetConfirm(false)}
+          />
+        )}
+
+        {showExitConfirm && (
+          <ConfirmDialog
+            title="確定離開遊戲？"
+            message="離開後會返回模式選擇畫面，確定要離開目前遊戲嗎？"
+            confirmLabel="離開遊戲"
+            cancelLabel="繼續遊戲"
+            confirmVariant="danger"
+            onConfirm={confirmExit}
+            onCancel={cancelExit}
           />
         )}
 

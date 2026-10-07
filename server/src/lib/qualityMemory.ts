@@ -53,8 +53,8 @@ export async function updateQualityMemory(rules: string[]): Promise<void> {
 }
 
 export async function ensureQualityMemory(): Promise<void> {
-  const approved = await getDb().collection<{ rule: string; status: string }>('qualityRuleSuggestions')
-    .find({ status: 'approved' })
+  const approved = await getDb().collection<{ rule: string; status: string; workshopType?: string }>('qualityRuleSuggestions')
+    .find({ status: 'approved', workshopType: { $ne: 'schema-design' } })
     .sort({ approvedAt: 1, createdAt: 1 })
     .toArray();
   await updateQualityMemory([...new Set(approved.map((item) => item.rule))]);

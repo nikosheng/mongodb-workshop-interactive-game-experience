@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { WorkshopType } from '@query-quest/shared';
 import { LoginPage } from './components/Login/LoginPage';
 import { ModeSelectPage } from './components/ModeSelect/ModeSelectPage';
 import { GamePage } from './components/Game/GamePage';
@@ -10,9 +11,9 @@ import { apiGet } from './hooks/useApi';
 export type AppRoute =
   | { page: 'login' }
   | { page: 'mode-select' }
-  | { page: 'game'; mode: 'solo' }
-  | { page: 'lobby'; roomCode?: string }
-  | { page: 'multiplayer-game'; roomCode: string }
+  | { page: 'game'; mode: 'solo'; workshopType: WorkshopType }
+  | { page: 'lobby'; roomCode?: string; workshopType: WorkshopType }
+  | { page: 'multiplayer-game'; roomCode: string; workshopType: WorkshopType }
   | { page: 'leaderboard'; roomCode?: string }
   | { page: 'admin' };
 
@@ -81,8 +82,8 @@ export default function App() {
       return (
         <ModeSelectPage
           user={user!}
-          onSelectSolo={() => navigate({ page: 'game', mode: 'solo' })}
-          onSelectMultiplayer={() => navigate({ page: 'lobby' })}
+          onSelectSolo={(workshopType) => navigate({ page: 'game', mode: 'solo', workshopType })}
+          onSelectMultiplayer={(workshopType) => navigate({ page: 'lobby', workshopType })}
           onLogout={handleLogout}
         />
       );
@@ -92,6 +93,7 @@ export default function App() {
         <GamePage
           user={user!}
           mode="solo"
+          workshopType={(route as { workshopType: WorkshopType }).workshopType}
           onFinish={() => navigate({ page: 'leaderboard' })}
           onBack={() => navigate({ page: 'mode-select' })}
         />
@@ -102,7 +104,8 @@ export default function App() {
         <LobbyPage
           user={user!}
           roomCode={(route as { roomCode?: string }).roomCode}
-          onGameStart={(code) => navigate({ page: 'multiplayer-game', roomCode: code })}
+          workshopType={(route as { workshopType: WorkshopType }).workshopType}
+          onGameStart={(code, workshopType) => navigate({ page: 'multiplayer-game', roomCode: code, workshopType })}
           onBack={() => navigate({ page: 'mode-select' })}
         />
       );
@@ -112,6 +115,7 @@ export default function App() {
         <GamePage
           user={user!}
           mode="multiplayer"
+          workshopType={(route as { workshopType: WorkshopType }).workshopType}
           roomCode={(route as { roomCode: string }).roomCode}
           onFinish={() => navigate({ page: 'leaderboard', roomCode: (route as { roomCode: string }).roomCode })}
           onBack={() => navigate({ page: 'mode-select' })}

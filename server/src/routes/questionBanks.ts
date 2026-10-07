@@ -2,12 +2,16 @@ import { timingSafeEqual } from 'crypto';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
-import type { Challenge, QuestionBank } from '@query-quest/shared';
+import type { Challenge, QuestionBank, WorkshopType } from '@query-quest/shared';
 import { getDb } from '../db/client.js';
 import { runQuestionBankGeneration } from '../workflows/questionBankWorkflow.js';
+import { runSchemaDesignGeneration } from '../workflows/schemaDesignWorkflow.js';
 import { suggestQualityRule } from '../lib/qualityRules.js';
+import { suggestSchemaDesignQualityRule } from '../lib/schemaDesignQualityRules.js';
 import { GLOBAL_BANK_POLICY, readQualityMemory, updateQualityMemory } from '../lib/qualityMemory.js';
+import { SCHEMA_DESIGN_BANK_POLICY, readSchemaDesignQualityMemory, updateSchemaDesignQualityMemory } from '../lib/schemaDesignQualityMemory.js';
 import { validateEditedChallenge } from '../lib/llm.js';
+import { validateEditedSchemaDesignChallenge } from '../lib/schemaDesignLlm.js';
 import { resetCurrentRound } from '../lib/rounds.js';
 
 interface QuestionBankDocument {
@@ -20,19 +24,32 @@ interface QuestionBankDocument {
   createdAt: Date;
   updatedAt: Date;
   isActive: boolean;
+  workshopType: WorkshopType;
 }
 
 const router = Router();
+const workshopTypeSchema = z.enum(['crud', 'schema-design']).default('crud');
 const generateSchema = z.object({
   name: z.string().trim().min(2, '題庫名稱至少需要 2 個字元').max(60, '題庫名稱不可超過 60 個字元'),
   useCase: z.string().trim().min(5, '請至少輸入 5 個字元的挑戰情境說明').max(2000, '挑戰情境說明不可超過 2000 個字元'),
+  workshopType: workshopTypeSchema,
 });
 const answerKeySchema = z.record(z.string().min(1));
 const approveSchema = z.object({ reason: z.string().trim().max(1000).optional() });
 const appendSchema = z.object({ request: z.string().trim().min(5, '追加要求至少需要 5 個字元').max(1000, '追加要求不可超過 1000 個字元') });
 
 function toQuestionBank(doc: QuestionBankDocument & { _id: ObjectId }): QuestionBank {
-  return { ...doc, _id: doc._id.toString(), createdAt: doc.createdAt.toISOString(), updatedAt: doc.updatedAt?.toISOString() };
+  return {
+    ...doc,
+    _id: doc._id.toString(),
+    createdAt: doc.createdAt.toISOString(),
+    updatedAt: doc.updatedAt?.toISOString(),
+    workshopType: doc.workshopType ?? 'crud',
+  };
+}
+
+function parseWorkshopType(value: unknown): WorkshopType {
+  return value === 'schema-design' ? 'schema-design' : 'crud';
 }
 
 function requireAdmin(req: Request, res: Response, next: NextFunction): void {
@@ -55,26 +72,37 @@ function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-router.get('/active', async (_req, res) => {
+router.get('/active', async (req, res) => {
   const db = getDb();
-  const bank = await db.collection<QuestionBankDocument>('questionBanks').findOne({ isActive: true, status: 'ready' });
+  const workshopType = parseWorkshopType(req.query['workshopType']);
+  const bank = await db.collection<QuestionBankDocument>('questionBanks').findOne({ isActive: true, status: 'ready', workshopType });
   res.json({ bank: bank ? toQuestionBank(bank) : null });
 });
 
 router.use(requireAdmin);
 
-router.get('/', async (_req, res) => {
-  const banks = await getDb().collection<QuestionBankDocument>('questionBanks').find().sort({ createdAt: -1 }).toArray();
+router.get('/', async (req, res) => {
+  const workshopType = req.query['workshopType'];
+  const match: import('mongodb').Filter<QuestionBankDocument> = workshopType === 'schema-design'
+    ? { workshopType: 'schema-design' }
+    : workshopType === 'crud'
+      ? { workshopType: { $ne: 'schema-design' } }
+      : {};
+  const banks = await getDb().collection<QuestionBankDocument>('questionBanks').find(match).sort({ createdAt: -1 }).toArray();
   res.json({ banks: banks.map(toQuestionBank) });
 });
 
-router.get('/quality-rules', async (_req, res) => {
-  const suggestions = await getDb().collection('qualityRuleSuggestions').find().sort({ status: 1, createdAt: -1 }).toArray();
+router.get('/quality-rules', async (req, res) => {
+  const workshopType = parseWorkshopType(req.query['workshopType']);
+  const match = workshopType === 'schema-design' ? { workshopType: 'schema-design' } : { workshopType: { $ne: 'schema-design' } };
+  const suggestions = await getDb().collection('qualityRuleSuggestions').find(match).sort({ status: 1, createdAt: -1 }).toArray();
   res.json({ suggestions });
 });
 
-router.get('/quality-rules/memory', async (_req, res) => {
-  res.json({ memory: await readQualityMemory() });
+router.get('/quality-rules/memory', async (req, res) => {
+  const workshopType = parseWorkshopType(req.query['workshopType']);
+  const memory = workshopType === 'schema-design' ? await readSchemaDesignQualityMemory() : await readQualityMemory();
+  res.json({ memory });
 });
 
 router.post('/admin/reset-round', async (_req, res) => {
@@ -84,7 +112,11 @@ router.post('/admin/reset-round', async (_req, res) => {
 
 router.get('/admin/leaderboard', async (req, res) => {
   const mode = req.query['mode'] as string | undefined;
-  const match = mode === 'solo' || mode === 'multiplayer' ? { mode } : {};
+  const workshopType = req.query['workshopType'] as string | undefined;
+  const match: Record<string, unknown> = {};
+  if (mode === 'solo' || mode === 'multiplayer') match['mode'] = mode;
+  if (workshopType === 'schema-design') match['workshopType'] = 'schema-design';
+  else if (workshopType === 'crud') match['workshopType'] = { $ne: 'schema-design' };
   const entries = await getDb().collection('leaderboardEntries').aggregate([
     { $match: match },
     { $sort: { totalScore: -1, completionMs: 1, hintsUsed: 1, completedAt: 1 } },
@@ -164,7 +196,9 @@ router.patch('/:id/questions/:challengeId', async (req, res) => {
     return;
   }
   try {
-    const challenge = validateEditedChallenge({ ...req.body, id: existing.id });
+    const challenge = bank.workshopType === 'schema-design'
+      ? validateEditedSchemaDesignChallenge({ ...req.body, id: existing.id })
+      : validateEditedChallenge({ ...req.body, id: existing.id });
     await collection.updateOne(
       { _id: bank._id, 'challenges.id': existing.id },
       { $set: { 'challenges.$': challenge, updatedAt: new Date() }, $pull: { approvedQuestionIds: existing.id } as never },
@@ -205,10 +239,19 @@ router.post('/:id/questions/:challengeId/approve', async (req, res) => {
   const allApproved = bank.challenges.every((item) => approved.includes(item.id));
   await collection.updateOne({ _id: bank._id }, { $set: { approvedQuestionIds: approved, status: allApproved ? 'ready' : 'review', updatedAt: new Date() } });
   if (reason) {
-    await getDb().collection('questionBankReviewEvents').insertOne({ bankId: bank._id.toString(), challengeId: challenge.id, reason, createdAt: new Date() });
+    const workshopType = bank.workshopType ?? 'crud';
+    await getDb().collection('questionBankReviewEvents').insertOne({ bankId: bank._id.toString(), challengeId: challenge.id, reason, workshopType, createdAt: new Date() });
     try {
-      const suggestion = await suggestQualityRule(reason);
-      if (suggestion) await getDb().collection('qualityRuleSuggestions').updateOne({ rule: suggestion.rule }, { $setOnInsert: { ...suggestion, status: 'pending', createdAt: new Date() } }, { upsert: true });
+      const suggestion = workshopType === 'schema-design'
+        ? await suggestSchemaDesignQualityRule(reason)
+        : await suggestQualityRule(reason);
+      if (suggestion) {
+        await getDb().collection('qualityRuleSuggestions').updateOne(
+          { rule: suggestion.rule },
+          { $setOnInsert: { ...suggestion, workshopType, status: 'pending', createdAt: new Date() } },
+          { upsert: true },
+        );
+      }
     } catch {
       // A memory suggestion is an enhancement; it must not block question approval.
     }
@@ -222,15 +265,21 @@ router.post('/quality-rules/:id/approve', async (req, res) => {
     return;
   }
   const db = getDb();
-  const suggestion = await db.collection<{ rule: string; status: string }>('qualityRuleSuggestions').findOne({ _id: new ObjectId(req.params['id']) });
+  const suggestion = await db.collection<{ rule: string; status: string; workshopType?: string }>('qualityRuleSuggestions').findOne({ _id: new ObjectId(req.params['id']) });
   if (!suggestion) {
     res.status(404).json({ error: '找不到規則建議' });
     return;
   }
-  const approvedRules = await db.collection<{ rule: string; status: string }>('qualityRuleSuggestions').find({ status: 'approved' }).sort({ createdAt: 1 }).toArray();
+  const workshopType = suggestion.workshopType === 'schema-design' ? 'schema-design' : 'crud';
+  const match = workshopType === 'schema-design' ? { workshopType: 'schema-design' } : { workshopType: { $ne: 'schema-design' } };
+  const approvedRules = await db.collection<{ rule: string; status: string }>('qualityRuleSuggestions').find({ ...match, status: 'approved' }).sort({ createdAt: 1 }).toArray();
   const rules = [...approvedRules.map((item) => item.rule), ...(suggestion.status === 'approved' ? [] : [suggestion.rule])];
   await db.collection('qualityRuleSuggestions').updateOne({ _id: new ObjectId(req.params['id']) }, { $set: { status: 'approved', approvedAt: new Date() } });
-  await updateQualityMemory([...new Set(rules)]);
+  if (workshopType === 'schema-design') {
+    await updateSchemaDesignQualityMemory([...new Set(rules)]);
+  } else {
+    await updateQualityMemory([...new Set(rules)]);
+  }
   res.json({ ok: true });
 });
 
@@ -264,7 +313,22 @@ router.post('/:id/questions/generate', async (req, res) => {
     return;
   }
   const appendRequest = parsed.data.request;
+  const workshopType = bank.workshopType ?? 'crud';
   try {
+    if (workshopType === 'schema-design') {
+      const globalQualityRules = await readSchemaDesignQualityMemory();
+      const [challenge] = await runSchemaDesignGeneration(
+        `${bank.useCase}\n\nAdmin 這次的追加要求：${appendRequest}\n\n全域品質規則（只遵守跨領域可行性與難度規則，不要複製任何背景）：${globalQualityRules}\n\n既有題目標題（請避免重複）：${bank.challenges.map((item) => item.title).join('、')}`,
+        1,
+      );
+      if (!challenge || bank.challenges.some((item) => item.id === challenge.id)) {
+        throw new Error('新增題目的 ID 與現有題目重複');
+      }
+      await collection.updateOne({ _id: bank._id }, { $push: { challenges: challenge } as never, $set: { status: 'review', updatedAt: new Date() } });
+      await getDb().collection('questionBankReviewEvents').insertOne({ bankId: bank._id.toString(), type: 'append-request', request: appendRequest, challengeId: challenge.id, workshopType, createdAt: new Date() });
+      res.status(201).json({ challenge });
+      return;
+    }
     const globalQualityRules = await readQualityMemory();
     const [challenge] = await runQuestionBankGeneration(
       `${bank.useCase}\n\nAdmin 這次的追加要求：${appendRequest}\n\n全域品質規則（只遵守跨領域可行性與難度規則，不要複製任何背景）：${globalQualityRules}\n\n既有題目標題（請避免重複）：${bank.challenges.map((item) => item.title).join('、')}`,
@@ -274,7 +338,7 @@ router.post('/:id/questions/generate', async (req, res) => {
       throw new Error('新增題目的 ID 與現有題目重複');
     }
     await collection.updateOne({ _id: bank._id }, { $push: { challenges: challenge } as never, $set: { status: 'review', updatedAt: new Date() } });
-    await getDb().collection('questionBankReviewEvents').insertOne({ bankId: bank._id.toString(), type: 'append-request', request: appendRequest, challengeId: challenge.id, createdAt: new Date() });
+    await getDb().collection('questionBankReviewEvents').insertOne({ bankId: bank._id.toString(), type: 'append-request', request: appendRequest, challengeId: challenge.id, workshopType, createdAt: new Date() });
     res.status(201).json({ challenge });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : '追加題目失敗' });
@@ -288,7 +352,7 @@ router.post('/generate', async (req, res) => {
     return;
   }
 
-  const { name, useCase } = parsed.data;
+  const { name, useCase, workshopType } = parsed.data;
   const db = getDb();
   const collection = db.collection<QuestionBankDocument>('questionBanks');
   const result = await collection.insertOne({
@@ -300,11 +364,19 @@ router.post('/generate', async (req, res) => {
     createdAt: new Date(),
     updatedAt: new Date(),
     isActive: false,
+    workshopType,
   });
 
   try {
-    const globalRules = await readQualityMemory();
-    const challenges: Challenge[] = await runQuestionBankGeneration(`${useCase}\n\n${GLOBAL_BANK_POLICY}\n\nApproved cross-bank rules:\n${globalRules}`);
+    const challenges: Challenge[] = workshopType === 'schema-design'
+      ? await (async () => {
+        const globalRules = await readSchemaDesignQualityMemory();
+        return runSchemaDesignGeneration(`${useCase}\n\n${SCHEMA_DESIGN_BANK_POLICY}\n\nApproved cross-bank rules:\n${globalRules}`);
+      })()
+      : await (async () => {
+        const globalRules = await readQualityMemory();
+        return runQuestionBankGeneration(`${useCase}\n\n${GLOBAL_BANK_POLICY}\n\nApproved cross-bank rules:\n${globalRules}`);
+      })();
     await collection.updateOne({ _id: result.insertedId }, { $set: { challenges, status: 'review', approvedQuestionIds: [], updatedAt: new Date() }, $unset: { errorMsg: '' } });
     const bank = await collection.findOne({ _id: result.insertedId });
     res.status(201).json({ bank: toQuestionBank(bank!) });
@@ -327,7 +399,9 @@ router.post('/:id/activate', async (req, res) => {
     res.status(404).json({ error: '找不到可啟用的完成題庫' });
     return;
   }
-  await collection.updateMany({}, { $set: { isActive: false } });
+  const workshopType = target.workshopType ?? 'crud';
+  // Only one bank per workshop type may be active at a time.
+  await collection.updateMany({ workshopType }, { $set: { isActive: false } });
   await collection.updateOne({ _id: targetId }, { $set: { isActive: true } });
   res.json({ bank: toQuestionBank({ ...target, isActive: true }) });
 });

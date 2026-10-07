@@ -1,6 +1,10 @@
 import OpenAI from 'openai';
 import { isDeepStrictEqual } from 'node:util';
-import type { Challenge, Puzzle } from '@query-quest/shared';
+import type { Challenge, ExpectedAnswer, Puzzle } from '@query-quest/shared';
+
+/** This module only ever deals with the 5 CRUD challenge types, which always carry `sql` and `expected`. */
+type CrudChallengeType = 'FIND' | 'INSERT' | 'UPDATE' | 'DELETE' | 'AGGREGATE';
+type CrudChallenge = Challenge & { type: CrudChallengeType; sql: string; expected: ExpectedAnswer };
 
 const LLM_PROMPT = `請以 JSON 格式生成 MongoDB Query Quest 的「ANSI SQL → MongoDB Query Language」轉換題目。
 
@@ -46,13 +50,13 @@ function requireMatchingPuzzle(
   }
 }
 
-function validateSql(challenge: Challenge, index: number): void {
+function validateSql(challenge: CrudChallenge, index: number): void {
   const sql = challenge.sql.trim();
   if (!sql.endsWith(';')) throw new Error(`第 ${index + 1} 題的 SQL 必須以分號結尾`);
   if (/\b(LIMIT|TOP|ILIKE|JOIN)\b|NOW\s*\(|`/.test(sql)) {
     throw new Error(`第 ${index + 1} 題的 SQL 包含不支援的非 ANSI 語法`);
   }
-  const prefixByType: Record<Challenge['type'], RegExp> = {
+  const prefixByType: Record<CrudChallengeType, RegExp> = {
     FIND: /^SELECT\b/i,
     INSERT: /^INSERT\s+INTO\b/i,
     UPDATE: /^(UPDATE\b|MERGE\s+INTO\b)/i,
@@ -95,7 +99,7 @@ function ensureCorrectPuzzle(challenge: Challenge, slotId: string, kind: Puzzle[
   return id;
 }
 
-function normalizePlayableChallenge(challenge: Challenge): void {
+function normalizePlayableChallenge(challenge: CrudChallenge): void {
   const answerKey: Record<string, string> = {};
   switch (challenge.expected.type) {
     case 'FIND':
@@ -129,8 +133,8 @@ function normalizePlayableChallenge(challenge: Challenge): void {
   challenge.answerKey = answerKey;
 }
 
-function validatePlayableChallenge(challenge: Challenge, index: number): void {
-  const allowedSlots: Record<Challenge['type'], string[]> = {
+function validatePlayableChallenge(challenge: CrudChallenge, index: number): void {
+  const allowedSlots: Record<CrudChallengeType, string[]> = {
     FIND: ['s_cmd', 's_filter', 's_proj', 's_sort', 's_limit'],
     INSERT: ['s_cmd', 's_doc'],
     UPDATE: ['s_cmd', 's_filter', 's_update', 's_options'],
@@ -242,9 +246,9 @@ function validateChallenges(value: unknown, normalizeAnswerKeys = true): Challen
     if (expected.type === 'DELETE' && expected.multi && (!expected.filter || Object.keys(expected.filter).length === 0)) {
       throw new Error(`第 ${index + 1} 題的 deleteMany 不可使用空 filter`);
     }
-    validateSql(challenge as Challenge, index);
-    if (normalizeAnswerKeys) normalizePlayableChallenge(challenge as Challenge);
-    validatePlayableChallenge(challenge as Challenge, index);
+    validateSql(challenge as CrudChallenge, index);
+    if (normalizeAnswerKeys) normalizePlayableChallenge(challenge as CrudChallenge);
+    validatePlayableChallenge(challenge as CrudChallenge, index);
   });
 
   return value as Challenge[];

@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
-import type { QuestionBank } from '@query-quest/shared';
+import type { QuestionBank, WorkshopType } from '@query-quest/shared';
 import { apiAdminDelete, apiAdminGet, apiAdminPost } from '../../hooks/useApi';
 import styles from './QuestionBankGallery.module.css';
 
 interface Props {
   secret: string;
+  workshopType: WorkshopType;
   refreshKey: number;
   onReview: (bankId: string) => void;
 }
 
-export function QuestionBankGallery({ secret, refreshKey, onReview }: Props) {
+export function QuestionBankGallery({ secret, workshopType, refreshKey, onReview }: Props) {
   const [banks, setBanks] = useState<QuestionBank[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -19,7 +20,7 @@ export function QuestionBankGallery({ secret, refreshKey, onReview }: Props) {
     setLoading(true);
     setError('');
     try {
-      const result = await apiAdminGet<{ banks: QuestionBank[] }>('/api/question-banks', secret);
+      const result = await apiAdminGet<{ banks: QuestionBank[] }>(`/api/question-banks?workshopType=${workshopType}`, secret);
       setBanks(result.banks);
     } catch (err) {
       setError(err instanceof Error ? err.message : '無法讀取題庫');
@@ -28,7 +29,7 @@ export function QuestionBankGallery({ secret, refreshKey, onReview }: Props) {
     }
   };
 
-  useEffect(() => { void loadBanks(); }, [refreshKey, secret]);
+  useEffect(() => { void loadBanks(); }, [refreshKey, secret, workshopType]);
 
   const activate = async (id: string) => {
     setUpdatingId(id);
